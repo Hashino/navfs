@@ -1,35 +1,12 @@
 use itertools::Itertools;
 use std::{env::current_dir, io::Result, path::PathBuf};
 
-use super::FilePicker;
-
-pub fn get_directory_display_entries(picker: &FilePicker) -> Vec<String> {
-
-        let mut display_entries = <Vec<String>>::new();
-
-        for entry in picker.items.clone().into_iter() {
-            let prefix: String = match entry.is_dir() {
-                true => "  ".to_string(),
-                false => "  ".to_string(),
-            };
-            let file_name: String = prefix
-                + entry
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_str()
-                    .unwrap_or_default();
-            display_entries.push(file_name);
-        }
-        
-        display_entries[0] = " ..".to_string(); 
-
-        return display_entries;
+pub struct Dir {
+    pub pathbuf: PathBuf,
+    pub display_name: String,
 }
 
-pub fn get_cur_dir_entries_ordered() -> Result<Vec<PathBuf>> {
-    
-    let parent: PathBuf = current_dir()?.parent().unwrap_or(&current_dir()?).to_path_buf()
-;
+pub fn get_cur_dir_entries_ordered() -> Result<Vec<Dir>> {
     //gets sorted list of files/directories in current working dir
     let entries: Vec<PathBuf> = current_dir()?
         .read_dir()?
@@ -53,9 +30,36 @@ pub fn get_cur_dir_entries_ordered() -> Result<Vec<PathBuf>> {
         .map(|r| (*r).clone())
         .collect();
 
-    let ordered_entries: Vec<PathBuf> = vec![vec![parent], folder_entries, file_entries].concat();
+    let ordered_entries: Vec<PathBuf> = vec![folder_entries, file_entries].concat();
 
-    return Ok(ordered_entries);
+    let mut res = <Vec<Dir>>::new();
+
+    let parent = Dir {
+        pathbuf: current_dir()?
+            .parent()
+            .unwrap_or(&current_dir()?)
+            .to_path_buf(),
+        display_name: " ..".to_string(),
+    };
+
+    res.push(parent);
+
+    for entry in ordered_entries {
+        let d = Dir {
+            pathbuf: entry.clone(),
+            display_name: match entry.is_dir() {
+                true => "  ".to_string(),
+                false => "  ".to_string(),
+            } + entry
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default(),
+        };
+        res.push(d);
+    }
+
+    return Ok(res);
 }
 
 pub fn get_cur_dir_path() -> Result<String> {

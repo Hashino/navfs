@@ -4,14 +4,13 @@ use ratatui::{prelude::*, widgets::*};
 use std::{
     env::set_current_dir,
     io::{self, Result},
-    path::PathBuf,
 };
 
-use self::utils::{get_cur_dir_entries_ordered, get_cur_dir_path, get_directory_display_entries};
+use self::utils::{get_cur_dir_entries_ordered, get_cur_dir_path, Dir};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct FilePicker {
-    items: Vec<PathBuf>,
+    items: Vec<Dir>,
     index: usize,
     exit: bool,
 }
@@ -72,24 +71,28 @@ impl FilePicker {
     }
 
     fn open_dir(&mut self) {
-        match set_current_dir(&self.items[self.index]) {
+        match set_current_dir(&self.items[self.index].pathbuf) {
             Ok(_) => (),
             Err(error) => println!("Error opening directory/file: {:?}", error),
         }
-        self.items = get_cur_dir_entries_ordered().unwrap_or(<Vec<PathBuf>>::new());
+        self.items = get_cur_dir_entries_ordered().unwrap_or(<Vec<Dir>>::new());
         self.index = 0;
     }
 
     fn exit(&mut self) {
-
         self.exit = true;
     }
 }
 
 impl Widget for &FilePicker {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let list =
-            List::new(get_directory_display_entries(self)).highlight_style(Theme::new().selected);
+        let list = List::new(
+            self.items
+                .iter()
+                .map(|dir| dir.display_name.clone())
+                .collect::<Vec<String>>(),
+        )
+        .highlight_style(Theme::new().selected);
 
         let mut state = ListState::default().with_selected(Some(self.index));
 
