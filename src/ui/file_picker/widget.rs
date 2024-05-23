@@ -1,61 +1,40 @@
-use crate::{theme::Theme, tui};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crate::theme::Theme;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
-use std::{
-    env::set_current_dir,
-    io::{self, Result},
-};
+use std::{env::set_current_dir, io::Result};
 
-use self::utils::{get_cur_dir_entries_ordered, get_cur_dir_path, Dir};
+use super::dir::{get_cur_dir_entries_ordered, Dir};
 
 #[derive(Default)]
 pub struct FilePicker {
     items: Vec<Dir>,
     index: usize,
-    exit: bool,
+    pub selected: bool,
 }
-
-mod utils;
 
 impl FilePicker {
     /// runs the application's main loop until the user quits
-    pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<String> {
+    pub fn initialize(&mut self) {
         match get_cur_dir_entries_ordered() {
             Ok(ret) => self.items = ret,
             Err(error) => println!("Error while reading directory: {:?}", error),
         }
-
-        while !self.exit {
-            terminal.draw(|frame| self.render_frame(frame))?;
-            self.handle_events()?;
-        }
-
-        return get_cur_dir_path();
     }
 
-    fn render_frame(&self, frame: &mut Frame) {
+    pub fn render_frame(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.size());
     }
 
-    fn handle_events(&mut self) -> Result<()> {
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            }
-            _ => {}
-        };
-        Ok(())
-    }
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
+    pub fn handle_keys(&mut self, key: KeyEvent) -> Result<()> {
+        // it's important to check that the event is a key press event as
+        // crossterm also emits key release and repeat events on Windows.
+        match key.code {
             KeyCode::Char('j') => self.select_next(),
             KeyCode::Char('k') => self.select_prev(),
             KeyCode::Enter => self.open_dir(),
             _ => {}
         }
+        Ok(())
     }
 
     fn select_next(&mut self) {
@@ -75,12 +54,8 @@ impl FilePicker {
             Ok(_) => (),
             Err(error) => println!("Error opening directory/file: {:?}", error),
         }
-        self.items = get_cur_dir_entries_ordered().unwrap_or(<Vec<Dir>>::new());
+        self.initialize();
         self.index = 0;
-    }
-
-    fn exit(&mut self) {
-        self.exit = true;
     }
 }
 

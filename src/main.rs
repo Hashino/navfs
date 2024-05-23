@@ -1,22 +1,22 @@
 use std::io::Result;
-use ui_elements::FilePicker;
+
+use ui::app::App;
+
 
 mod theme;
 mod tui;
-mod ui_elements;
+mod ui;
 
 fn main() -> Result<()> {
     let mut terminal = tui::init()?;
-    let app_result = FilePicker::default().run(&mut terminal);
+    let app_result = App::default().run(&mut terminal);
     tui::restore()?;
 
     match app_result {
         Ok(path) => {
-            println!("{:?}", path);
+            println!("{}", path);
             Ok(())
         }
-        Err(e) => {
-            Err(e)
-        }
+        Err(e) => Err(e),
     }
 }
