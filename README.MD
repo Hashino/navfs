@@ -1,3 +1,20 @@
+# Current State
+
+![](https://github.com/Hashino/navfs/raw/main/preview/preview.gif)
+
+- [ ] Basic browsing functionality
+  - [x] cd/ls
+  - [ ] cp
+  - [ ] mv
+  - [ ] rm
+- [ ] Preview Pane
+  - [x] file explorer
+  - [ ] image preview
+  - [ ] text preview
+- [ ] Status Bar
+- [ ] Search Box
+- [ ] Floating Terminal
+
 # Goal
 A replacament for: `cd`, `ls`, `cp`. `mv`, `rm` with an asynchronous preview window
 
