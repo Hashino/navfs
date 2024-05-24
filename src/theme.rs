@@ -6,6 +6,8 @@ pub struct Theme {
     pub selected: Style,
 }
 
+// TODO: ability to configure colors and styles in a .file
+
 impl Theme {
     pub fn new() -> Theme {
         Theme {

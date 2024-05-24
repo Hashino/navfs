@@ -1,9 +1,10 @@
 use std::io::Result;
+use std::path::PathBuf;
 
 use crate::tui;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders};
+use ratatui::widgets::Block;
 use ratatui::{
     buffer::Buffer,
     layout::{Direction, Layout, Rect},
@@ -11,24 +12,31 @@ use ratatui::{
     Frame,
 };
 
-use super::file_picker::{dir::get_cur_dir_path, widget::FilePicker};
+use super::file_picker::{dir::get_cur_dir, widget::FilePicker};
 
 enum WhichPane {
     FilePicker,
     PreviewPane,
 }
 
+impl Default for WhichPane {
+    fn default() -> Self {
+        WhichPane::FilePicker
+    }
+}
+
 #[derive(Default)]
 pub struct App {
     file_picker: FilePicker,
-    // preview_pane: PreviewPane,
-    curr_selected: Option<WhichPane>,
+    preview_pane: FilePicker,
+    curr_selected: WhichPane,
     exit: bool,
 }
 
 impl App {
     pub fn run(&mut self, terminal: &mut tui::Tui) -> Result<String> {
-        self.file_picker.initialize();
+        self.file_picker.initialize(None);
+        self.file_picker.selected = true;
 
         while !self.exit {
             terminal.draw(|frame| self.render_frame(frame))?;
@@ -36,7 +44,10 @@ impl App {
             self.handle_events()?;
         }
 
-        return get_cur_dir_path();
+        match get_cur_dir() {
+            Ok(path) => Ok(path.display_name),
+            Err(e) => Err(e),
+        }
     }
 
     fn render_frame(&self, frame: &mut Frame) {
@@ -50,11 +61,38 @@ impl App {
                 match key_event.code {
                     KeyCode::Char('q') => self.exit(),
                     _ => {
-                        match self.curr_selected {
-                            Some(WhichPane::FilePicker) | None => {
-                                self.file_picker.handle_keys(key_event)?
+                        if key_event.modifiers == KeyModifiers::CONTROL {
+                            match key_event.code {
+                                KeyCode::Char('l') => {
+                                    self.curr_selected = WhichPane::PreviewPane;
+                                    self.file_picker.selected = false;
+                                    self.preview_pane.selected = true;
+                                }
+                                KeyCode::Char('h') => { 
+                                    self.curr_selected = WhichPane::FilePicker;
+                                    self.file_picker.selected = true;
+                                    self.preview_pane.selected = false;
+                                }
+                                _ => (),
                             }
-                            Some(WhichPane::PreviewPane) => (), //TODO
+                        }
+                        match self.curr_selected {
+                            WhichPane::FilePicker => {
+                                self.file_picker.handle_keys(key_event);
+                                match key_event.code {
+                                    KeyCode::Char('j') | KeyCode::Char('k') => {
+                                        let curr = self.file_picker.curr_sel_entry();
+                                        if curr.is_dir() {
+                                            self.preview_pane.initialize(Some(curr.to_path_buf()));
+                                        }
+                                    }
+                                    KeyCode::Enter => {
+                                        self.preview_pane.initialize(None);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            WhichPane::PreviewPane => self.preview_pane.handle_keys(key_event), //TODO
                         }
                     }
                 }
@@ -69,16 +107,18 @@ impl App {
 }
 
 impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render(self, _area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(*buf.area());
 
+        let preview_pane_block = Block::bordered().title("Preview");
+
         self.file_picker.render(layout[0], buf);
+        preview_pane_block.clone().render(layout[1], buf);
 
-        let b = Block::default().title("TODO").borders(Borders::ALL);
-
-        b.render(layout[1], buf)
+        self.preview_pane
+            .render(preview_pane_block.inner(layout[1]), buf);
     }
 }

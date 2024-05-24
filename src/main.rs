@@ -2,7 +2,6 @@ use std::io::Result;
 
 use ui::app::App;
 
-
 mod theme;
 mod tui;
 mod ui;
@@ -14,6 +13,7 @@ fn main() -> Result<()> {
 
     match app_result {
         Ok(path) => {
+            // with this the user can use navfs to cd to the location last browsed
             println!("{}", path);
             Ok(())
         }

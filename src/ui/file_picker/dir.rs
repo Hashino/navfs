@@ -6,9 +6,19 @@ pub struct Dir {
     pub display_name: String,
 }
 
-pub fn get_cur_dir_entries_ordered() -> Result<Vec<Dir>> {
+impl Default for Dir {
+    fn default() -> Self {
+        let home = current_dir().unwrap_or_default();
+        Dir {
+            pathbuf: home.clone(),
+            display_name: home.display().to_string(),
+        }
+    }
+}
+
+pub fn get_dir_entries_ordered(dir: PathBuf) -> Result<Vec<Dir>> {
     //gets sorted list of files/directories in current working dir
-    let entries: Vec<PathBuf> = current_dir()?
+    let entries: Vec<PathBuf> = dir
         .read_dir()?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<PathBuf>>>()?
@@ -23,7 +33,7 @@ pub fn get_cur_dir_entries_ordered() -> Result<Vec<Dir>> {
         .map(|r| (*r).clone())
         .collect();
 
-    //vector of pointers tothe items in entries that are files (not folder)
+    //vector of pointers to the items in entries that are files (not folder)
     let file_entries: Vec<PathBuf> = entries
         .iter()
         .filter(|r| !r.is_dir())
@@ -35,10 +45,7 @@ pub fn get_cur_dir_entries_ordered() -> Result<Vec<Dir>> {
     let mut res = <Vec<Dir>>::new();
 
     let parent = Dir {
-        pathbuf: current_dir()?
-            .parent()
-            .unwrap_or(&current_dir()?)
-            .to_path_buf(),
+        pathbuf: current_dir()?.parent().unwrap_or(&dir).to_path_buf(),
         display_name: " ..".to_string(),
     };
 
@@ -62,10 +69,10 @@ pub fn get_cur_dir_entries_ordered() -> Result<Vec<Dir>> {
     return Ok(res);
 }
 
-pub fn get_cur_dir_path() -> Result<String> {
-    let path_res = current_dir();
-    match path_res {
-        Ok(path) => Ok(path.as_path().to_str().unwrap_or_default().to_string()),
-        Err(e) => Err(e),
-    }
+pub fn get_cur_dir() -> Result<Dir> {
+    let path_res = current_dir()?;
+    Ok(Dir {
+        display_name: path_res.as_path().to_str().unwrap_or_default().to_string(),
+        pathbuf: path_res,
+    })
 }
