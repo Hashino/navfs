@@ -8,7 +8,7 @@ mod ui;
 
 fn main() -> Result<()> {
     let mut terminal = tui::init()?;
-    let app_result = App::default().run(&mut terminal);
+    let app_result = App::run(&mut terminal);
     tui::restore()?;
 
     match app_result {

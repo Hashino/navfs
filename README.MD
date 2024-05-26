@@ -6,12 +6,12 @@
   - [x] cd/ls
   - [ ] cp
   - [ ] mv
-  - [ ] rm
+  - [x] rm
 - [ ] Preview Pane
   - [x] file explorer
   - [ ] image preview
   - [ ] text preview
-- [ ] Status Bar
+- [x] Status Bar
 - [ ] Search Box
 - [ ] Floating Terminal
 
