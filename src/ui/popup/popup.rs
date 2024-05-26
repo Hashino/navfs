@@ -36,8 +36,8 @@ pub fn show_info(title: &str, info: String) {
 
             let info_size = info.clone().chars().filter(|c| *c == '\n').count();
             let paragraph = Paragraph::new(info.clone()).wrap(Wrap { trim: false }); //message body
-
-            let inner = block.inner(centered_rect(50, 5 + info_size as u16, frame.size()));
+    
+            let inner = block.inner(centered_rect(65, 5 + info_size as u16, frame.size()));
 
             frame.render_widget(paragraph.clone().block(block), inner);
         })?;
@@ -59,7 +59,7 @@ pub fn show_info(title: &str, info: String) {
     }
 }
 
-pub fn show_confirmation(title: String, info: String) -> Result<bool> {
+pub fn show_confirmation(title: &str, info: String) -> Result<bool> {
     let mut term = tui::init()?;
     term.draw(|frame| {
         let block = Block::default()
