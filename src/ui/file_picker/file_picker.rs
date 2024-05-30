@@ -1,6 +1,9 @@
 use crate::{
     theme::Theme,
-    ui::popup::popup::{show_confirmation, show_error, show_info},
+    ui::popup::{
+        self,
+        popup::{show_confirmation, show_error, show_info},
+    },
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{prelude::*, widgets::*};
@@ -10,13 +13,20 @@ use std::{
     path::PathBuf,
 };
 
-use super::dir::{change_working_dir, get_cur_dir, get_dir_entries_ordered, get_parent_dir, Dir};
+use super::dir::Dir;
 
+/// Wrapper widget around the [List](ratatui::widgets::List) to manage its events and state
+///
+/// [items](Vec<Dir>): the current entries rendered in the widget
+/// [index](usize): the index of the entry under the cursor
+/// [buffer](Vec<PathBuf): buffered (selected) items currently
+/// [active](bool): if the widget is currently selected
+/// [needs_redraw](bool): tells the parent widget it needs to redraw itself
 pub struct FilePicker {
     items: Vec<Dir>,
     index: usize,
     buffer: Vec<PathBuf>,
-    pub selected: bool,
+    pub active: bool,
     pub needs_redraw: bool,
 }
 
@@ -26,15 +36,21 @@ impl FilePicker {
             items: <Vec<Dir>>::new(),
             index: 0,
             buffer: <Vec<PathBuf>>::new(),
-            selected: is_selected,
+            active: is_selected,
             needs_redraw: false,
         }
     }
-    /// runs the application's main loop until the user quits
+
+    /// renders the widget with [dir](Option<PathBuf>) as the working directory
+    /// and the entry at the [index](Option<usize>) selected
+    ///
+    /// on [dir](Option<PathBuf>) == `None` defaults current working directory
+    /// on [index](Option<usize>) == `None` defaults to the first entry on the list (if the directory 
+    /// is not empty, the first after the parent entry)
     pub fn initialize(&mut self, dir: Option<PathBuf>, index: Option<usize>) {
         // poor man try catch
         if let Err(error) = (|| -> Result<()> {
-            let mut items = get_dir_entries_ordered(dir.unwrap_or(get_cur_dir().pathbuf))?;
+            let mut items = Dir::get_dir_entries_ordered(dir.unwrap_or(Dir::get_cur_dir().pathbuf))?;
 
             // displays which entries are in the buffer to the user
             for item in items.iter_mut() {
@@ -59,9 +75,12 @@ impl FilePicker {
             // if the directory is empty the cursor is put on the parent folder entry
             match index {
                 Some(value) => {
+                    // important to not index a negative value
                     self.index = if self.items.len() as i32 > value as i32 - 1 {
                         value
                     } else {
+                        // checks if the directory is not empty
+                        // (in which case the only entry will be the parent)
                         if self.items.len() as i32 > 1 {
                             1
                         } else {
@@ -69,6 +88,8 @@ impl FilePicker {
                         }
                     }
                 }
+                // in case no index is passed it selects either the parent, if the directory is
+                // empty, or the first entry after parent, if not.
                 None => self.index = if self.items.len() as i32 > 1 { 1 } else { 0 },
             }
 
@@ -82,14 +103,14 @@ impl FilePicker {
         // it's important to check that the event is a key press event as
         // crossterm also emits key release and repeat events on Windows.
         match key.code {
-            KeyCode::Char('h') => self.up_dir(),
-            KeyCode::Char('j') => self.select_next(),
-            KeyCode::Char('k') => self.select_prev(),
-            KeyCode::Char('l') => self.open_selected_dir(),
-            KeyCode::Char(' ') => self.buffer_item(),
-            KeyCode::Char('d') => self.delete_sel_entry(),
-            KeyCode::Char('g') => self.select_first(),
-            KeyCode::Char('G') => self.select_last(),
+            KeyCode::Char('h') => self.up_dir(), // go to parent directory
+            KeyCode::Char('j') => self.select_next(), // moves the cursor down in the list
+            KeyCode::Char('k') => self.select_prev(), // moves the cursor up in the list
+            KeyCode::Char('l') => self.open_selected_dir(), // opens the entry under cursor
+            KeyCode::Char(' ') => self.buffer_item(), // adds/removes item under cursor from buffer
+            KeyCode::Char('d') => self.delete_sel_entry(), // deletes entry under cursor
+            KeyCode::Char('g') => self.select_first(), // selects first entry after parent entry
+            KeyCode::Char('G') => self.select_last(), // selects last entry on the list
             KeyCode::Char('b') => {
                 // this second loop is to handle sequence keybindings
                 // after the first key in a sequence keybinding is detected it waits for the next
@@ -119,26 +140,14 @@ impl FilePicker {
                     }
                 }
             }
-            KeyCode::Char('?') => self.show_help(),
+            KeyCode::Char('?') => self.show_help(), // shows keybindings popup
             _ => {}
         }
     }
 
     fn show_help(&mut self) {
         self.needs_redraw = true;
-        let _ = show_info(
-            "Keybindings",
-            "".to_string()
-                + "[?]         - Show this window\n"
-                + "[j/k]       - Navigate up/down in list\n"
-                + "[l]         - Open directory/file\n"
-                + "[h]         - Go to parent directory\n"
-                + "[Space]     - Adds/Removes directory/files to/from buffer\n"
-                + "[d]         - Delete directory/file\n"
-                + "[bc]        - Clears buffer, ie: unselects all\n"
-                + "[bd]        - Deletes all files in buffer\n"
-                + "[Ctrl+ h/l] - Switch selected panel\n",
-        );
+        let _ = show_info("Keybindings", popup::popup::KEYBINDINGS_INFO.to_string());
     }
 
     fn select_first(&mut self) {
@@ -165,6 +174,7 @@ impl FilePicker {
         self.items[self.index].pathbuf.clone()
     }
 
+    /// opens the entry under the cursor on the current file picker
     fn open_selected_dir(&mut self) {
         let current_selected = self.curr_sel_entry();
         if current_selected.is_dir() {
@@ -172,7 +182,7 @@ impl FilePicker {
         }
     }
 
-    // adds/removes the item under the cursor to the buffer list for later use
+    /// adds/removes the item under the cursor to the buffer list for later use
     fn buffer_item(&mut self) {
         let value = self.curr_sel_entry();
         if self.buffer.contains(&value) {
@@ -189,19 +199,17 @@ impl FilePicker {
         self.delete_files(vec![curr_sel]);
     }
 
+    /// deletes with confirmation all directory entries passed as argument
     fn delete_files(&mut self, files: Vec<PathBuf>) -> bool {
         let mut files_string: String = "".to_string();
 
         // builds the list of files that will be deleted to display to the user
         for path in files.clone() {
             files_string = files_string
-                + &path
-                    .as_path()
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_string()
+                + &Dir::get_entry_name(Dir::get_parent_dir(path.clone()).pathbuf)
+                + "/"
+                + &Dir::get_entry_name(path.clone())
+                + if path.clone().is_dir() { "/" } else { "" }
                 + "\n";
         }
 
@@ -209,7 +217,7 @@ impl FilePicker {
 
         //poor man try catch
         match (|| -> Result<bool> {
-            if show_confirmation("Confirm deletion?", files_string)? {
+            if show_confirmation("Confirm deletion?", files_string) {
                 // deletes all file(s) sent as argument
                 for entry in files {
                     if entry.clone().is_dir() {
@@ -223,6 +231,7 @@ impl FilePicker {
                 self.initialize(
                     Some(curr_displaying_dir),
                     if self.index > 2 {
+                        // puts the cursor on the item above the one deleted
                         Some(self.index - 1)
                     } else {
                         None
@@ -241,30 +250,30 @@ impl FilePicker {
             Ok(res) => res,
         }
     }
-    
+
     fn up_dir(&mut self) {
-        self.change_curr_dir(get_parent_dir(get_cur_dir().pathbuf).pathbuf);
+        self.change_curr_dir(Dir::get_parent_dir(Dir::get_cur_dir().pathbuf).pathbuf);
     }
 
-    // returns current directory being displayed in the list
-    // *not* the apllication working directory
+    /// returns current directory being displayed in the list
+    /// *not* the apllication working directory
     fn get_curr_displaying_dir(&mut self) -> PathBuf {
-        get_parent_dir(self.curr_sel_entry()).pathbuf
+        Dir::get_parent_dir(self.curr_sel_entry()).pathbuf
     }
 
     fn change_curr_dir(&mut self, path: PathBuf) {
-        change_working_dir(path.clone());
+        Dir::change_working_dir(path.clone());
         self.initialize(Some(path.clone()), None);
     }
-
 }
 
+/// handles the rendering of the widget
 impl Widget for &FilePicker {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let mut style = Theme::new();
+        let mut style = Theme::default();
 
         // dims widget if not selected
-        if !self.selected {
+        if !self.active {
             style.normal = style.normal.add_modifier(Modifier::DIM);
             style.selected = style.selected.add_modifier(Modifier::DIM);
         }

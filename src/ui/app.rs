@@ -1,3 +1,4 @@
+//! Should handle only ui elements leaving actual file system implementations to the `Dir` type
 use std::io::{Result, Stdout};
 
 use crate::tui::Tui;
@@ -10,15 +11,24 @@ use ratatui::{
     widgets::Widget,
 };
 
-use super::file_picker::dir::{get_cur_dir, get_entry_name, get_entry_permissions_to_display, get_shortened_path};
-use super::file_picker::widget::FilePicker;
+use super::file_picker::dir::Dir;
+use super::file_picker::file_picker::FilePicker;
 
+// to determine which panel is currently selected
 #[derive(Eq, PartialEq)]
 enum WhichPane {
     FilePicker,
     PreviewPane,
 }
 
+/// the App module exists to manage states between child widgets
+/// it alsos handles global keybindings
+///
+/// [file_picker](FilePicker): left side widget
+/// [preview_pane](FilePicker): right side widget
+/// [curr_selected](WhichPane): enum to which panel is currently selected
+/// [exit](bool): if the app is done executing
+/// [term](Terminal<CrosstermBackend<Stdout>>): the virtual terminal running the app
 pub struct App<'a> {
     file_picker: FilePicker,
     preview_pane: FilePicker,
@@ -28,6 +38,7 @@ pub struct App<'a> {
 }
 
 impl App<'_> {
+    /// executes the app and returns the path to the final working directory
     pub fn run(terminal: &mut Tui) -> Result<String> {
         let mut app = App {
             file_picker: FilePicker::new(true),
@@ -44,6 +55,8 @@ impl App<'_> {
 
         while !app.exit {
             // main render loop done inline to avoid borrows
+            // handles rendering and constructing of Widgets
+            // TODO: modularize Widget construction for better readability
             app.term.draw(|frame| {
                 let _area = frame.size();
                 let buf: &mut Buffer = frame.buffer_mut();
@@ -51,11 +64,13 @@ impl App<'_> {
                 // splits the screen into zones for each widget
                 let layout_main_statusbar = Layout::default()
                     .direction(Direction::Vertical)
+                    // the bottom space has exactly 1 line of space the rest is filled by the panels
                     .constraints(vec![Constraint::Fill(100), Constraint::Length(1)])
                     .split(*buf.area());
                 let layout_picker_preview = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+                    // divides the panels area in 2
+                    .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)])
                     .split(layout_main_statusbar[0]);
 
                 // block around preview pane
@@ -66,21 +81,21 @@ impl App<'_> {
 
                 let curr_selected_entry = app.file_picker.curr_sel_entry().clone();
 
-                let curr_selected_name = get_entry_name(curr_selected_entry.clone())
+                let curr_selected_name = Dir::get_entry_name(curr_selected_entry.clone())
                     + if curr_selected_entry.is_dir() {
                         "/"
                     } else {
                         ""
                     };
 
-                let entry_permissions = get_entry_permissions_to_display(curr_selected_entry);
+                app.file_picker.render(layout_picker_preview[0], buf);
+
+                let entry_permissions = Dir::get_entry_metadata_to_display(curr_selected_entry);
 
                 let preview_pane_block = Block::bordered()
                     .title(curr_selected_name)
                     .title_bottom(Line::from(entry_permissions).centered())
                     .style(preview_pane_block_style);
-
-                app.file_picker.render(layout_picker_preview[0], buf);
 
                 preview_pane_block
                     .clone()
@@ -89,7 +104,7 @@ impl App<'_> {
                 app.preview_pane
                     .render(preview_pane_block.inner(layout_picker_preview[1]), buf);
 
-                let status_bar_text = get_shortened_path(get_cur_dir().pathbuf);
+                let status_bar_text = Dir::get_shortened_path(Dir::get_cur_dir().pathbuf);
 
                 Paragraph::new(status_bar_text)
                     .add_modifier(Modifier::DIM)
@@ -100,19 +115,8 @@ impl App<'_> {
             app.handle_events()?;
         }
 
-        Ok(get_cur_dir().display_name)
-    }
-
-    // hacky but reliable
-    // on 1.0 the whole application will be rewritten with tokio
-    fn redraw_if_needed(&mut self) {
-        if self.file_picker.needs_redraw | self.preview_pane.needs_redraw {
-            if let Ok(size) = self.term.size() {
-                if let Ok(..) = self.term.resize(size) {};
-            }
-            self.file_picker.needs_redraw = false;
-            self.preview_pane.needs_redraw = false;
-        }
+        // once the app finishes executing it returns the internal current directory
+        Ok(Dir::get_cur_dir().display_name)
     }
 
     fn handle_events(&mut self) -> Result<()> {
@@ -128,20 +132,23 @@ impl App<'_> {
                             // [Ctrl+l] switch to preview pane
                             KeyCode::Char('l') => {
                                 self.curr_selected = WhichPane::PreviewPane;
-                                self.file_picker.selected = false;
-                                self.preview_pane.selected = true;
+                                self.file_picker.active = false;
+                                self.preview_pane.active = true;
                             }
                             // [Ctrl+h] switch to file picker
                             KeyCode::Char('h') => {
                                 self.curr_selected = WhichPane::FilePicker;
-                                self.file_picker.selected = true;
-                                self.preview_pane.selected = false;
+                                self.file_picker.active = true;
+                                self.preview_pane.active = false;
                             }
                             _ => (),
                         }
                     } else {
                         self.get_curr_sel_pane().handle_keys(key_event);
 
+                        // if the user pressses a key that makes it necessary to update the preview
+                        // panel it does so. important that this happens after the child panel has
+                        // handled their events.
                         match key_event.code {
                             KeyCode::Char('h')
                             | KeyCode::Char('j')
@@ -165,8 +172,18 @@ impl App<'_> {
         self.redraw_if_needed();
         Ok(())
     }
-    fn exit(&mut self) {
-        self.exit = true;
+
+    /// since the inbuilt StateFul widget only triggers a redraw when a property changes, we call it
+    /// manually by using the resize method. specially important after a popup.
+    /// TODO: investigate a better way of handling this
+    fn redraw_if_needed(&mut self) {
+        if self.file_picker.needs_redraw | self.preview_pane.needs_redraw {
+            if let Ok(size) = self.term.size() {
+                if let Ok(..) = self.term.resize(size) {};
+            }
+            self.file_picker.needs_redraw = false;
+            self.preview_pane.needs_redraw = false;
+        }
     }
 
     fn get_curr_sel_pane(&mut self) -> &mut FilePicker {
@@ -174,5 +191,9 @@ impl App<'_> {
             WhichPane::FilePicker => &mut self.file_picker,
             WhichPane::PreviewPane => &mut self.preview_pane,
         }
+    }
+
+    fn exit(&mut self) {
+        self.exit = true;
     }
 }
