@@ -6,7 +6,8 @@ mod theme;
 mod tui;
 mod ui;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let mut terminal = tui::init()?;
     let app_result = App::run(&mut terminal);
     tui::restore()?;
@@ -14,7 +15,7 @@ fn main() -> Result<()> {
     match app_result {
         Ok(path) => {
             // with this the user can use navfs to cd to the location last browsed
-            println!("{}", path);
+            print!("{}", path);
             Ok(())
         }
         Err(e) => Err(e),

@@ -16,7 +16,7 @@ use std::io::{Error, Result};
 use crossterm::event::{self, KeyCode};
 use ratatui::{
     layout::Alignment,
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Modifier, Style},
     widgets::{
         block::{self, Position},
         Block, Borders, Paragraph, Wrap,
@@ -61,7 +61,6 @@ pub fn show_info(title: &str, info: String) {
                             .position(Position::Bottom),
                     )
                     .borders(Borders::ALL)
-                    .on_blue()
                     .title_style(Style::default().add_modifier(Modifier::BOLD));
 
             let info_size = info.clone().chars().filter(|c| *c == '\n').count();
@@ -96,38 +95,46 @@ pub fn show_info(title: &str, info: String) {
 /// ∣           ∣
 /// +-Y-------N-+
 pub fn show_confirmation(title: &str, info: String) -> bool {
+    let text = "\n".to_string() + &info.clone();
     // try catch
     match (|| -> Result<bool> {
         let mut term = tui::init()?;
         term.draw(|frame| {
+
+
             //outside block with the Yes/No options
             let block = Block::default()
                 .title(block::Title::from(title).alignment(Alignment::Center))
+                .borders(Borders::ALL)
+                .title_style(Style::default().add_modifier(Modifier::BOLD).fg(Color::White));
+
+            // inside text
+            let paragraph = Paragraph::new(text.clone()).style(Style::default().fg(Color::Yellow));
+            let info_size = text.clone().chars().filter(|c| *c == '\n').count();
+
+            let area = Utils::centered_rect(25, 5 + info_size as u16, frame.size());
+            let inner = block.inner(area);
+
+            frame.render_widget(paragraph.clone().block(block), inner);
+
+            let yes = Block::default()
                 .title(
-                    block::Title::from("[Y]es")
+                    block::Title::from("  [Y]es")
                         .alignment(Alignment::Left)
                         .position(Position::Bottom),
                 )
+                .title_style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Green));
+            frame.render_widget(yes.clone(), area);
+
+
+            let no = Block::default()
                 .title(
-                    block::Title::from("[N]o")
+                    block::Title::from("[N]o  ")
                         .alignment(Alignment::Right)
                         .position(Position::Bottom),
                 )
-                .borders(Borders::ALL)
-                .on_blue()
-                .title_style(
-                    Style::default()
-                        .add_modifier(Modifier::BOLD)
-                        .fg(Color::LightCyan),
-                );
-
-            // inside text
-            let paragraph = Paragraph::new(info.clone()).style(Style::default().fg(Color::Cyan));
-            let info_size = info.clone().chars().filter(|c| *c == '\n').count();
-
-            let inner = block.inner(Utils::centered_rect(25, 5 + info_size as u16, frame.size()));
-
-            frame.render_widget(paragraph.clone().block(block), inner);
+                .title_style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Red));
+            frame.render_widget(no.clone(), area);
         })?;
 
         loop {
