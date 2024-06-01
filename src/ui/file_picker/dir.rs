@@ -17,7 +17,7 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use std::{
     env::{self, current_dir, set_current_dir},
-    io::{Error, Result},
+    io::Result,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::PathBuf,
     time::SystemTime,
@@ -53,7 +53,6 @@ impl Dir {
             .into_iter() // TODO implement own Ord
             .sorted()
             .collect();
-
         //vector of pointers to the items in entries that are folders
         let folder_entries: Vec<PathBuf> = entries
             .iter()
@@ -135,7 +134,7 @@ impl Dir {
                 display_name: Dir::get_display_name(p.to_path_buf()),
             },
             None => {
-                show_error("Couldn't get parent directory", Error::last_os_error());
+                //show_error("Couldn't get parent directory", Error::last_os_error());
                 Dir {
                     pathbuf: path.clone(),
                     display_name: Dir::get_display_name(path),
