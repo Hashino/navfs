@@ -45,18 +45,20 @@ impl FilePicker {
     /// and the entry at the [index](Option<usize>) selected
     ///
     /// on [dir](Option<PathBuf>) == `None` defaults current working directory
-    /// on [index](Option<usize>) == `None` defaults to the first entry on the list (if the directory 
+    /// on [index](Option<usize>) == `None` defaults to the first entry on the list (if the directory
     /// is not empty, the first after the parent entry)
     pub fn initialize(&mut self, dir: Option<PathBuf>, index: Option<usize>) {
         // poor man try catch
         if let Err(error) = (|| -> Result<()> {
-            let mut items = Dir::get_dir_entries_ordered(dir.unwrap_or(Dir::get_cur_dir().pathbuf))?;
+            let mut items =
+                Dir::get_dir_entries_ordered(dir.unwrap_or(Dir::get_cur_dir().pathbuf))?;
 
             // displays which entries are in the buffer to the user
             for item in items.iter_mut() {
                 if self.buffer.contains(&item.pathbuf) {
                     item.display_name.replace_range(
                         0..1,
+                        // TODO: find a better symbol to indicate buffered entries
                         if self.buffer.contains(&item.pathbuf) {
                             "-"
                         } else {
@@ -95,7 +97,10 @@ impl FilePicker {
 
             Ok(())
         })() {
-            show_error("Error while reading directory", error);
+            self.items = vec![Dir {
+                pathbuf: Dir::get_cur_dir().pathbuf,
+                display_name: "Couldn't read entry: ".to_string() + &error.to_string(),
+            }];
         }
     }
 
@@ -245,6 +250,7 @@ impl FilePicker {
         })() {
             Err(error) => {
                 show_error("Error deleting file", error);
+                self.needs_redraw = true;
                 false
             }
             Ok(res) => res,
@@ -252,7 +258,11 @@ impl FilePicker {
     }
 
     fn up_dir(&mut self) {
-        self.change_curr_dir(Dir::get_parent_dir(Dir::get_cur_dir().pathbuf).pathbuf);
+        let curr = Dir::get_cur_dir().pathbuf;
+        let parent = Dir::get_parent_dir(curr.clone()).pathbuf;
+        if parent != curr {
+            self.change_curr_dir(Dir::get_parent_dir(Dir::get_cur_dir().pathbuf).pathbuf);
+        }
     }
 
     /// returns current directory being displayed in the list

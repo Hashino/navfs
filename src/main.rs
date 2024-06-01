@@ -14,7 +14,7 @@ fn main() -> Result<()> {
     match app_result {
         Ok(path) => {
             // with this the user can use navfs to cd to the location last browsed
-            println!("{}", path);
+            print!("{}", path);
             Ok(())
         }
         Err(e) => Err(e),
