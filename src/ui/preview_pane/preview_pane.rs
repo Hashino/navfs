@@ -1,7 +1,5 @@
 use crossterm::event::KeyEvent;
-use image::DynamicImage;
-use image::{imageops::FilterType, io::Reader as ImageReader};
-use image_ascii::TextGenerator;
+use rascii_art::{render_to, RenderOptions};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -18,10 +16,7 @@ pub struct PreviewPane {
 }
 use std::path::PathBuf;
 
-use crate::ui::{
-    file_picker::{dir::Dir, file_picker::FilePicker},
-    utils::Utils,
-};
+use crate::ui::file_picker::{dir::Dir, file_picker::FilePicker};
 
 impl PreviewPane {
     pub fn new() -> PreviewPane {
@@ -99,30 +94,24 @@ impl PreviewPane {
 
 // TODO: optmize this mess
 fn render_image_as_ascii(area: Rect, buf: &mut Buffer, image_file: PathBuf) {
-    let drawing_characters = &[' ', '🞌', '🞍', '🞐', '🞑', '🞒', '🞓', '🞕'];
+    let mut buffer = String::new();
 
-    let dynamic_image: DynamicImage = ImageReader::open(image_file).unwrap().decode().unwrap();
+    render_to(
+        image_file.as_path().to_str().unwrap(),
+        &mut buffer,
+        &RenderOptions::new()
+            .width(area.width as u32)
+            .height(area.height as u32)
+            .colored(false)
+            .charset(&[" ", "🞗", "🞘", "🞙", "🞚", "◈", "🞛", "❖", "⯁", "■"]),
+    )
+    .unwrap();
 
-    let fixed_widht_image = dynamic_image.resize_exact(
-        (dynamic_image.width() as f32 * 2.5) as u32,
-        dynamic_image.height(),
-        FilterType::Nearest,
-    );
+    let output = buffer
+        .lines()
+        .map(|line| Line::raw(line))
+        .collect::<Vec<Line>>();
 
-    let resized_image = fixed_widht_image.thumbnail(area.width.into(), area.height.into());
-
-    let ascii: String = TextGenerator::new(&resized_image)
-        .set_density_chars(drawing_characters)
-        .unwrap()
-        .generate();
-
-    let result: Vec<Line> = ascii.lines().map(|line| Line::raw(line)).collect();
-
-    let centered_area = Utils::centered_rect(
-        result[0].width().try_into().unwrap_or_default(),
-        result.len().try_into().unwrap_or_default(),
-        area,
-    );
-
-    Paragraph::new(result).render(centered_area, buf)
+    let paragraph = Paragraph::new(output);
+    paragraph.render(area, buf)
 }
