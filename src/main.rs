@@ -9,14 +9,16 @@ mod theme;
 mod tui;
 mod ui;
 
-fn main() -> Result<()> {
+
+#[tokio::main]
+async fn main()  {
     let args = parse_args::parse_args();
 
-    let mut terminal = tui::init()?;
+    let mut terminal = tui::init().unwrap();
     let app_result = App::run(&mut terminal);
-    tui::restore()?;
+    tui::restore().unwrap();
 
-    match app_result {
+    match app_result.await {
         Ok(path) => {
             // with this the user can use navfs to cd to the location last browsed
             args.get("file").map(|file| match File::create(file) {
@@ -32,8 +34,8 @@ fn main() -> Result<()> {
                     exit(1)
                 }
             });
-            Ok(())
+            // Ok(())
         }
-        Err(e) => Err(e),
+        Err(_e) => {},
     }
 }
