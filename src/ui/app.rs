@@ -39,7 +39,7 @@ pub struct App<'a> {
 
 impl App<'_> {
     /// executes the app and returns the path to the final working directory
-    pub fn run(terminal: &mut Tui) -> Result<String> {
+    pub async fn run(terminal: &mut Tui) -> Result<String> {
         let mut app = App {
             file_picker: FilePicker::new(true),
             preview_pane: PreviewPane::new(),

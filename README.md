@@ -9,7 +9,7 @@
   - [x] rm
 - [ ] Preview Pane
   - [x] file explorer
-  - [ ] image preview
+  - [x] image preview
   - [ ] text preview
 - [x] Status Bar
 - [ ] Search Box

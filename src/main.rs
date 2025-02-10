@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::io::Result;
 use std::io::Write;
 use std::process::exit;
 use ui::app::App;
@@ -9,12 +8,20 @@ mod theme;
 mod tui;
 mod ui;
 
-fn main() -> Result<()> {
+enum ExitCode {
+    Success = 0,
+    ErrorCreatingFile = 1,
+    ErrorWritingToFile = 2,
+    GenericError = 3,
+}
+
+#[tokio::main]
+async fn main() {
     let args = parse_args::parse_args();
 
-    let mut terminal = tui::init()?;
-    let app_result = App::run(&mut terminal);
-    tui::restore()?;
+    let mut terminal = tui::init().unwrap();
+    let app_result = App::run(&mut terminal).await;
+    tui::restore().unwrap();
 
     match app_result {
         Ok(path) => {
@@ -24,16 +31,20 @@ fn main() -> Result<()> {
                     Ok(_) => exit(0),
                     Err(e) => {
                         eprintln!("Error writing to file: {}", e);
-                        exit(2)
+                        exit(ExitCode::ErrorWritingToFile as i32);
                     }
                 },
                 Err(e) => {
                     eprintln!("Error creating file: {}", e);
-                    exit(1)
+                    exit(ExitCode::ErrorCreatingFile as i32);
                 }
             });
-            Ok(())
         }
-        Err(e) => Err(e),
+        Err(e) => {
+            eprintln!("Error running app: {}", e);
+            exit(ExitCode::GenericError as i32);
+        }
     }
+
+    exit(ExitCode::Success as i32);
 }
