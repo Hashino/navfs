@@ -1,5 +1,5 @@
 use crossterm::event::KeyEvent;
-use rascii_art::{render_to, RenderOptions};
+use rascii_art::RenderOptions;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -56,14 +56,38 @@ impl PreviewPane {
             match self.curr_entry.extension() {
                 Some(extension) => match extension.to_str() {
                     Some("png") | Some("jpg") | Some("jpeg") => {
-                        render_image_as_ascii(preview_inner_area, buf, self.curr_entry.clone());
+                        let mut buffer = String::new();
+
+                        rascii_art::render_to(
+                            self.curr_entry.to_str().unwrap(),
+                            &mut buffer,
+                            &RenderOptions::new()
+                                .width(area.width as u32)
+                                .height(area.height as u32)
+                                .colored(false)
+                                .charset(&[" ", "🞗", "🞘", "🞙", "🞚", "◈", "🞛", "❖", "⯁", "■"]),
+                        )
+                        .unwrap();
+
+                        Paragraph::new(
+                            buffer
+                                .lines()
+                                .map(|line| Line::raw(line))
+                                .collect::<Vec<Line>>(),
+                        )
+                        .render(preview_inner_area, buf)
                     }
                     _ => {
-                        let text = Paragraph::new("Not yet implementd");
-                        text.render(area, buf)
+                        let content = std::fs::read_to_string(self.curr_entry.clone())
+                            .unwrap_or_else(|_| "Could not read file".to_string());
+                        Paragraph::new(content).render(preview_inner_area, buf)
                     }
                 },
-                None => (),
+                None => {
+                    let content = std::fs::read_to_string(self.curr_entry.clone())
+                        .unwrap_or_else(|_| "Could not read file".to_string());
+                    Paragraph::new(content).render(preview_inner_area, buf);
+                }
             }
         }
     }
@@ -90,28 +114,4 @@ impl PreviewPane {
         // renders the preview pane inside the block
         return preview_pane_block.inner(area);
     }
-}
-
-// TODO: optmize this mess
-fn render_image_as_ascii(area: Rect, buf: &mut Buffer, image_file: PathBuf) {
-    let mut buffer = String::new();
-
-    render_to(
-        image_file.as_path().to_str().unwrap(),
-        &mut buffer,
-        &RenderOptions::new()
-            .width(area.width as u32)
-            .height(area.height as u32)
-            .colored(false)
-            .charset(&[" ", "🞗", "🞘", "🞙", "🞚", "◈", "🞛", "❖", "⯁", "■"]),
-    )
-    .unwrap();
-
-    let output = buffer
-        .lines()
-        .map(|line| Line::raw(line))
-        .collect::<Vec<Line>>();
-
-    let paragraph = Paragraph::new(output);
-    paragraph.render(area, buf)
 }

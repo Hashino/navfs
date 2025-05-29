@@ -10,7 +10,7 @@
 - [ ] Preview Pane
   - [x] file explorer
   - [x] image preview
-  - [ ] text preview
+  - [/] text preview
 - [x] Status Bar
 - [ ] Search Box
 - [ ] Floating Terminal
